@@ -50,3 +50,28 @@ func (m *Repository) About(w http.ResponseWriter, r *http.Request) {
 		StringMap: stringMap,
 	})
 }
+
+// Reservation for handle Reservations
+func (m *Repository) Reservation(w http.ResponseWriter, r *http.Request) {
+	render.Template(w, "make-reservation.page.html", &models.TemplateData{})
+}
+
+// Generals for handle Generals and book
+func (m *Repository) Generals(w http.ResponseWriter, r *http.Request) {
+	render.Template(w, "generals.page.html", &models.TemplateData{})
+}
+
+// Majors for handle Majors and book
+func (m *Repository) Majors(w http.ResponseWriter, r *http.Request) {
+	render.Template(w, "majors.page.html", &models.TemplateData{})
+}
+
+// Availability for handle Availability page
+func (m *Repository) Availability(w http.ResponseWriter, r *http.Request) {
+	render.Template(w, "search-availability.page.html", &models.TemplateData{})
+}
+
+// Contact for handle Contact page
+func (m *Repository) Contact(w http.ResponseWriter, r *http.Request) {
+	render.Template(w, "contact.page.html", &models.TemplateData{})
+}
