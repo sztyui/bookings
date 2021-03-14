@@ -2,6 +2,7 @@ package render
 
 import (
 	"bytes"
+	"errors"
 	"log"
 	"net/http"
 	"path"
@@ -25,22 +26,28 @@ func NewTemplates(a *config.AppConfig) {
 // AddDefaultData for adding the default data to my
 // TemplateData model
 func AddDefaultData(td *models.TemplateData, r *http.Request) *models.TemplateData {
+	td.Flash = app.Session.PopString(r.Context(), "flash")
+	td.Error = app.Session.PopString(r.Context(), "error")
+	td.Warning = app.Session.PopString(r.Context(), "warning")
 	td.CSRFToken = nosurf.Token(r)
 	return td
 }
 
+var templateCacheFolder string = "./templates"
+
 // Template is for rendering template files
-func Template(w http.ResponseWriter, r *http.Request, tmpl string, td *models.TemplateData) {
+func Template(w http.ResponseWriter, r *http.Request, tmpl string, td *models.TemplateData) error {
 	var tc map[string]*template.Template
 	if app.UseCache {
 		// get the template cache from the app config
 		tc = app.TemplateCache
 	} else {
-		tc, _ = CreateTemplateCache("./templates")
+		tc, _ = CreateTemplateCache(templateCacheFolder)
 	}
 	t, ok := tc[tmpl]
 	if !ok {
-		log.Fatal("Template not found", tmpl)
+		log.Fatal("Template not found ", path.Join(templateCacheFolder, tmpl))
+		return errors.New("Can't get template from cache")
 	}
 
 	buf := new(bytes.Buffer)
@@ -52,7 +59,10 @@ func Template(w http.ResponseWriter, r *http.Request, tmpl string, td *models.Te
 	_, err := buf.WriteTo(w)
 	if err != nil {
 		log.Println("Error writing template to buffer", err)
+		return err
 	}
+
+	return nil
 }
 
 // CreateTemplateCache creates a template cache as a map
