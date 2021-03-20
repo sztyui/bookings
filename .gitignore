@@ -1,1 +1,9 @@
 .idea
+
+database.yml
+run.sh
+coverage.out
+.DS_store
+start_server.sh
+
+migrations/
