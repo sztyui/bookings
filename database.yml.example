@@ -1,7 +1,7 @@
 development:
   dialect: postgres
   database: bookings
-  user:
+  user: 
   password:
   host: localhost
   pool: 5
