@@ -2,11 +2,12 @@ package handlers
 
 import (
 	"encoding/json"
-	"fmt"
+	"errors"
 	"net/http"
 	"strconv"
 	"time"
 
+	"github.com/go-chi/chi"
 	"github.com/sztyui/bookings/internal/config"
 	"github.com/sztyui/bookings/internal/driver"
 	"github.com/sztyui/bookings/internal/forms"
@@ -52,11 +53,27 @@ func (m *Repository) About(w http.ResponseWriter, r *http.Request) {
 
 // Reservation for handle Reservations
 func (m *Repository) Reservation(w http.ResponseWriter, r *http.Request) {
+	res, ok := m.App.Session.Get(r.Context(), "reservation").(models.Reservation)
+	if !ok {
+		helpers.ServerError(w, errors.New("getting session variable reservation failed"))
+		return
+	}
+
+	sd := res.StartDate.Format("2006-01-02")
+	ed := res.EndDate.Format("2006-01-02")
+
+	stringMap := make(map[string]string)
+	stringMap["room_name"] = res.Room.RoomName
+	stringMap["start_date"] = sd
+	stringMap["end_date"] = ed
+
+	data := make(map[string]interface{})
+	data["reservation"] = res
+
 	render.Template(w, r, "make-reservation.page.html", &models.TemplateData{
-		Form: forms.New(nil),
-		Data: map[string]interface{}{ // empty handler for the empty reservation form
-			"reservation": models.Reservation{},
-		},
+		Form:      forms.New(nil),
+		Data:      data,
+		StringMap: stringMap,
 	})
 }
 
@@ -180,15 +197,26 @@ func (m *Repository) PostAvailability(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	for _, i := range rooms {
-		m.App.InfoLog.Println("ROOM:", i.ID, i.RoomName)
-	}
-
 	if len(rooms) == 0 {
-		m.App.InfoLog.Println("No available rooms this time.")
+		// no availability
+		m.App.Session.Put(r.Context(), "error", "No availability")
+		http.Redirect(w, r, "/search-availability", http.StatusSeeOther)
+		return
 	}
 
-	w.Write([]byte(fmt.Sprintf("Pstart date is %s and end date is %s", start, end)))
+	data := make(map[string]interface{})
+	data["rooms"] = rooms
+
+	res := models.Reservation{
+		StartDate: startDate,
+		EndDate:   endDate,
+	}
+
+	m.App.Session.Put(r.Context(), "reservation", res)
+
+	render.Template(w, r, "choose-room.page.html", &models.TemplateData{
+		Data: data,
+	})
 }
 
 type jsonResponse struct {
@@ -236,4 +264,26 @@ func (m *Repository) ReservationSummary(w http.ResponseWriter, r *http.Request) 
 			"reservation": reservation,
 		},
 	})
+}
+
+// ChooseRoom is for picking room where neccesary
+func (m *Repository) ChooseRoom(w http.ResponseWriter, r *http.Request) {
+	roomID, err := strconv.Atoi(chi.URLParam(r, "id"))
+	if err != nil {
+		helpers.ServerError(w, err)
+		return
+	}
+	res, ok := m.App.Session.Get(r.Context(), "reservation").(models.Reservation)
+	if !ok {
+		helpers.ServerError(w, errors.New("Getting session value for reservation failed."))
+		return
+	}
+	res.RoomID = roomID
+	room, err := m.DB.GetRoomNameByID(res.RoomID)
+	if err != nil {
+		helpers.ServerError(w, err)
+	}
+	res.Room.RoomName = room.RoomName
+	m.App.Session.Put(r.Context(), "reservation", res)
+	http.Redirect(w, r, "/make-reservation", http.StatusSeeOther)
 }
