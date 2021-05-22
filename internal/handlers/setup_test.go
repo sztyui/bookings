@@ -5,6 +5,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"testing"
 	"time"
 
 	"github.com/alexedwards/scs/v2"
@@ -20,7 +21,7 @@ import (
 var app config.AppConfig
 var session *scs.SessionManager
 
-func getRoutes() http.Handler {
+func TestMain(m *testing.M) {
 	// what am I goint toput in the session
 
 	gob.Register(models.Reservation{})
@@ -42,7 +43,7 @@ func getRoutes() http.Handler {
 
 	app.Session = session
 
-	db, err := driver.ConnectSQL("host=localhost port=5432 dbname=bookings user=postgres password=lofasz123")
+	_, err := driver.ConnectSQL("host=localhost port=5432 dbname=bookings user=postgres password=lofasz123")
 	if err != nil {
 		log.Fatal("cannot connect to the database", err)
 	}
@@ -54,11 +55,15 @@ func getRoutes() http.Handler {
 	app.TemplateCache = tc
 	app.UseCache = true
 
-	repo := NewRepo(&app, db)
+	repo := NewTestRepo(&app)
 	NewHandlers(repo)
 
 	render.NewRenderer(&app)
 
+	os.Exit(m.Run())
+}
+
+func getRoutes() http.Handler {
 	mux := chi.NewRouter()
 
 	mux.Use(middleware.Recoverer)
