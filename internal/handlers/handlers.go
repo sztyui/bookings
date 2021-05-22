@@ -123,12 +123,6 @@ func (m *Repository) BookRoom(w http.ResponseWriter, r *http.Request) {
 
 // PostReservation handles the posting of a reservation form
 func (m *Repository) PostReservation(w http.ResponseWriter, r *http.Request) {
-	reservation, ok := m.App.Session.Get(r.Context(), "reservation").(models.Reservation)
-	if !ok {
-		m.App.Session.Put(r.Context(), "error", "can't get reservation from session")
-		http.Redirect(w, r, "/", http.StatusTemporaryRedirect)
-		return
-	}
 	err := r.ParseForm()
 	if err != nil {
 		m.App.Session.Put(r.Context(), "error", "can't parser form")
@@ -136,15 +130,28 @@ func (m *Repository) PostReservation(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	var reservation models.Reservation
 	reservation.FirstName = r.Form.Get("first_name")
 	reservation.LastName = r.Form.Get("last_name")
 	reservation.Phone = r.Form.Get("phone")
 	reservation.Email = r.Form.Get("email")
+	id, err := strconv.Atoi(r.Form.Get("room_id"))
+	if err != nil {
+		m.App.Session.Put(r.Context(), "error", "invalid input time format")
+		http.Redirect(w, r, "/", http.StatusTemporaryRedirect)
+		return
+	}
+	reservation.RoomID = id
 
 	layout := "2006-01-02"
 	startDate := r.Form.Get("start_date")
 	endDate := r.Form.Get("end_date")
 	sd, err := time.Parse(layout, startDate)
+	if err != nil {
+		m.App.Session.Put(r.Context(), "error", "invalid input time format")
+		http.Redirect(w, r, "/", http.StatusTemporaryRedirect)
+		return
+	}
 	ed, err := time.Parse(layout, endDate)
 	if err != nil {
 		m.App.Session.Put(r.Context(), "error", "invalid input time format")
@@ -163,7 +170,7 @@ func (m *Repository) PostReservation(w http.ResponseWriter, r *http.Request) {
 	if !form.Valid() {
 		data := make(map[string]interface{})
 		data["reservation"] = reservation
-
+		http.Redirect(w, r, "/", http.StatusTemporaryRedirect)
 		render.Template(w, r, "make-reservation.page.html", &models.TemplateData{
 			Form: form,
 			Data: data,
@@ -270,6 +277,17 @@ type jsonResponse struct {
 // AvailabilityJSON for handle the posted JSON and return
 // with the rooms free at the specified time also in JSON
 func (m *Repository) AvailabilityJSON(w http.ResponseWriter, r *http.Request) {
+	err := r.ParseForm()
+	if err != nil {
+		resp := jsonResponse{
+			OK:      false,
+			Message: "Internal server error",
+		}
+		out, _ := json.MarshalIndent(resp, "", "  ")
+		w.Header().Set("Content-Type", "application/json")
+		w.Write(out)
+		return
+	}
 	sd := r.Form.Get("start")
 	ed := r.Form.Get("end")
 
@@ -278,12 +296,26 @@ func (m *Repository) AvailabilityJSON(w http.ResponseWriter, r *http.Request) {
 	endDate, err := time.Parse(layout, ed)
 	roomID, err := strconv.Atoi(r.Form.Get("room_id"))
 	if err != nil {
-		helpers.ServerError(w, err)
+		resp := jsonResponse{
+			OK:      false,
+			Message: "error converting room_id to integer",
+		}
+
+		out, _ := json.MarshalIndent(resp, "", "  ")
+		w.Header().Set("Content-Type", "application/json")
+		w.Write(out)
 		return
 	}
 	available, err := m.DB.SearchAvailabilityByDatesByRoomID(startDate, endDate, roomID)
 	if err != nil {
-		helpers.ServerError(w, err)
+		resp := jsonResponse{
+			OK:      false,
+			Message: "Error connecting to database",
+		}
+
+		out, _ := json.MarshalIndent(resp, "", "  ")
+		w.Header().Set("Content-Type", "application/json")
+		w.Write(out)
 		return
 	}
 	resp := jsonResponse{
@@ -294,11 +326,7 @@ func (m *Repository) AvailabilityJSON(w http.ResponseWriter, r *http.Request) {
 		RoomID:    strconv.Itoa(roomID),
 	}
 
-	out, err := json.MarshalIndent(resp, "", "     ")
-	if err != nil {
-		helpers.ServerError(w, err)
-		return
-	}
+	out, _ := json.MarshalIndent(resp, "", "     ")
 
 	w.Header().Set("Content-Type", "application/json")
 	w.Write(out)

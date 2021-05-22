@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"log"
 	"net/http"
@@ -116,6 +117,17 @@ func TestRepository_Reservation(t *testing.T) {
 	}
 }
 
+func reqBodyBuilder(params map[string]string) string {
+	var result string
+	if len(params) == 0 {
+		return ""
+	}
+	for key, value := range params {
+		result = fmt.Sprintf("%s&%s=%s", result, key, value)
+	}
+	return result[1:]
+}
+
 func TestRepository_PostReservation(t *testing.T) {
 	reservation := models.Reservation{
 		FirstName: "John",
@@ -171,26 +183,62 @@ func TestRepository_PostReservation(t *testing.T) {
 	}
 
 	// test for invalid start date
-	reqBody = "start_date=invalid_format"
-	reqBody = fmt.Sprintf("%s&%s", reqBody, "end_date=2050-01-02")
-	reqBody = fmt.Sprintf("%s&%s", reqBody, "first_name=John")
-	reqBody = fmt.Sprintf("%s&%s", reqBody, "last_name=Smith")
-	reqBody = fmt.Sprintf("%s&%s", reqBody, "email=john@smith.com")
-	reqBody = fmt.Sprintf("%s&%s", reqBody, "phone=123456789")
-	reqBody = fmt.Sprintf("%s&%s", reqBody, "room_id=1")
-	req, _ = http.NewRequest("POST", "/make-reservation", strings.NewReader(reqBody))
-	ctx = getCtx(req)
-	req = req.WithContext(ctx)
+	param := []map[string]string{
+		{"start_date": "invalid", "end_date": "2050-01-02", "first_name": "John", "last_name": "Smith", "email": "john@smith.com", "phone": "123456789", "room_id": "1"},
+		{"start_date": "2050-01-01", "end_date": "invalid", "first_name": "John", "last_name": "Smith", "email": "john@smith.com", "phone": "123456789", "room_id": "1"},
+		{"start_date": "2050-01-01", "end_date": "2050-01-02", "first_name": "John", "last_name": "Smith", "email": "john@smith.com", "phone": "123456789", "room_id": "invalid"},
+		{"start_date": "2050-01-01", "end_date": "2050-01-02", "first_name": "J", "last_name": "Smith", "email": "john@smith.com", "phone": "123456789", "room_id": "1"},
+		{"start_date": "2050-01-01", "end_date": "2050-01-02", "first_name": "John", "last_name": "Smith", "email": "john@smith.com", "phone": "123456789", "room_id": "2"},
+		{"start_date": "2050-01-01", "end_date": "2050-01-02", "first_name": "John", "last_name": "Smith", "email": "john@smith.com", "phone": "123456789", "room_id": "3"},
+	}
 
-	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	for _, value := range param {
+		req, _ = http.NewRequest("POST", "/make-reservation", strings.NewReader(reqBodyBuilder(value)))
+		ctx = getCtx(req)
+		req = req.WithContext(ctx)
+		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+		rr = httptest.NewRecorder()
+		handler = http.HandlerFunc(Repo.PostReservation)
+		handler.ServeHTTP(rr, req)
+		if rr.Code != http.StatusTemporaryRedirect {
+			t.Errorf("Reservation handler returned wrong response code for invalid input. Got %d, wanted %d, input: %s", rr.Code, http.StatusTemporaryRedirect, value)
+		}
+	}
+}
 
-	rr = httptest.NewRecorder()
+func TestRepository_AvailabilityJSON(t *testing.T) {
+	postData := []struct {
+		params         map[string]string
+		expectedResult bool
+	}{
+		{map[string]string{"start_date": "2050-09-01", "end_date": "2050-09-02", "room_id": "1"}, true},
+		{map[string]string{"start_date": "2050-09-01", "end_date": "2050-09-02", "room_id": "2"}, false},
+		{map[string]string{"start_date": "2050-09-01", "end_date": "2050-09-02", "room_id": "3"}, false},
+		{map[string]string{"start_date": "2050-09-01", "end_date": "2050-09-02", "room_id": "a"}, false},
+		{map[string]string{}, false},
+	}
 
-	handler = http.HandlerFunc(Repo.PostReservation)
+	for _, val := range postData {
+		req, _ := http.NewRequest("POST", "/make-reservation", strings.NewReader(reqBodyBuilder(val.params)))
 
-	handler.ServeHTTP(rr, req)
-	if rr.Code != http.StatusTemporaryRedirect {
-		t.Errorf("Reservation handler returned wrong response code for invalid start_date got %d, wanted %d", rr.Code, http.StatusSeeOther)
+		// get context with session
+		ctx := getCtx(req)
+		req = req.WithContext(ctx)
+
+		// set http request header
+		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+		rr := httptest.NewRecorder()
+		handler := http.HandlerFunc(Repo.AvailabilityJSON)
+		handler.ServeHTTP(rr, req)
+
+		var j jsonResponse
+		err := json.Unmarshal([]byte(rr.Body.String()), &j)
+		if err != nil {
+			t.Error(err)
+		}
+		if j.OK != val.expectedResult {
+			t.Errorf("error with the json response: %v", j)
+		}
 	}
 }
 
