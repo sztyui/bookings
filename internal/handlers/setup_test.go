@@ -43,6 +43,12 @@ func TestMain(m *testing.M) {
 
 	app.Session = session
 
+	mailChan := make(chan models.MailData)
+	app.MailChan = mailChan
+	defer close(app.MailChan)
+
+	listenForMail()
+
 	_, err := driver.ConnectSQL("host=localhost port=5432 dbname=bookings user=postgres password=lofasz123")
 	if err != nil {
 		log.Fatal("cannot connect to the database", err)
@@ -61,6 +67,14 @@ func TestMain(m *testing.M) {
 	render.NewRenderer(&app)
 
 	os.Exit(m.Run())
+}
+
+func listenForMail() {
+	go func() {
+		for {
+			_ = <-app.MailChan
+		}
+	}()
 }
 
 func getRoutes() http.Handler {
