@@ -23,6 +23,7 @@ require (
 	github.com/gobuffalo/validate v2.0.4+incompatible // indirect
 	github.com/gobuffalo/validate/v3 v3.3.0 // indirect
 	github.com/gofrs/uuid v4.0.0+incompatible // indirect
+	github.com/gorilla/mux v1.7.3
 	github.com/gorilla/pat v1.0.1 // indirect
 	github.com/ian-kent/envconf v0.0.0-20141026121121-c19809918c02 // indirect
 	github.com/ian-kent/go-log v0.0.0-20160113211217-5731446c36ab // indirect
