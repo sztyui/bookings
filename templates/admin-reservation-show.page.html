@@ -60,18 +60,53 @@
                      required autocomplete="off" value='{{$res.Phone}}'>
             </div>
             <hr>
-            
-            <input type="submit" class="btn btn-primary" value="Save">
-            <a href="/admin/reservations-{{$src}}" class="btn btn-secondary">Cancel</a>
+            <div class="float-left">
+              <input type="submit" class="btn btn-primary" value="Save">
+              {{if eq $src "cal"}}
+                <a href="#!" onclick="window.history.go(-1)" class="btn btn-warning">Cancel</a>
+              {{else}}
+              <a href="/admin/reservations-{{$src}}" class="btn btn-secondary">Cancel</a>
+              {{end}}
+              <a href="#" class="btn btn-info" onclick="processRes({{$res.ID}})">Mark as processed</a>
+            </div>
+            <div class="float-right">
+              <a href="#" class="btn btn-danger" onclick="deleteRes({{$res.ID}})">Delete</a>
+            </div>
+            <div class="clearfix"></div>
           </form>
     </div>
 {{end}}
 
 {{define "js"}}
+    {{$src := index .StringMap "src"}}
     <script src="https://cdn.jsdelivr.net/npm/simple-datatables@latest" type="text/javascript"></script>
     <script>
         document.addEventListener("DOMContentLoaded", function(){
             const dataTable = new simpleDatatables.DataTable("#new-res", {})
         })
+
+        function processRes(id) {
+          attention.custom({
+            icon: 'warning',
+            msg: "Are you sure?",
+            callback: function(result) {
+              if(result !== false) {
+                window.location.href = "/admin/process-reservation/{{$src}}/" + id;
+              }
+            }
+          })
+        }
+
+        function deleteRes(id) {
+          attention.custom({
+            icon: 'warning',
+            msg: "Are you sure?",
+            callback: function(result) {
+              if(result !== false) {
+                window.location.href = "/admin/delete-reservation/{{$src}}/" + id;
+              }
+            }
+          })
+        }
     </script>
 {{end}}
