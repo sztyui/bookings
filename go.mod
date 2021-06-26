@@ -51,7 +51,7 @@ require (
 	github.com/spf13/cobra v1.1.3 // indirect
 	github.com/t-k/fluent-logger-golang v1.0.0 // indirect
 	github.com/tinylib/msgp v1.1.5 // indirect
-	github.com/xhit/go-simple-mail/v2 v2.9.1 // indirect
+	github.com/xhit/go-simple-mail/v2 v2.9.1
 	golang.org/x/crypto v0.0.0-20210322153248-0c34fe9e7dc2
 	golang.org/x/mod v0.4.2 // indirect
 	golang.org/x/net v0.0.0-20210316092652-d523dce5a7f4 // indirect

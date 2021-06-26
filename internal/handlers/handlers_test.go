@@ -7,6 +7,7 @@ import (
 	"log"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"strings"
 	"testing"
 	"time"
@@ -31,6 +32,14 @@ var theTests = []struct {
 	{"ms", "/majors-suite", "GET", http.StatusOK},
 	{"sa", "/search-availability", "GET", http.StatusOK},
 	{"contact", "/contact", "GET", http.StatusOK},
+	{"non-existent", "/green/eggs/and/ham", "GET", http.StatusNotFound},
+	// new router
+	{"login", "/user/login", "GET", http.StatusOK},
+	{"logout", "/user/logout", "GET", http.StatusOK},
+	{"dashboard", "/admin/dashboard", "GET", http.StatusOK},
+	{"new res", "/admin/reservations-new", "GET", http.StatusOK},
+	{"all res", "/admin/reservations-all", "GET", http.StatusOK},
+	{"show res", "/admin/reservations/new/1/show", "GET", http.StatusOK},
 }
 
 func TestHandlers(t *testing.T) {
@@ -82,8 +91,8 @@ func TestRepository_Reservation(t *testing.T) {
 	rr = httptest.NewRecorder()
 
 	handler.ServeHTTP(rr, req)
-	if rr.Code != http.StatusTemporaryRedirect {
-		t.Errorf("Reservation handler returned wrong response code: got %d, wanted %d", rr.Code, http.StatusTemporaryRedirect)
+	if rr.Code != http.StatusSeeOther {
+		t.Errorf("Reservation handler returned wrong response code: got %d, wanted %d", rr.Code, http.StatusSeeOther)
 	}
 
 	// test case where reservation ID is not exists
@@ -96,8 +105,8 @@ func TestRepository_Reservation(t *testing.T) {
 	req = req.WithContext(ctx)
 
 	handler.ServeHTTP(rr, req)
-	if rr.Code != http.StatusTemporaryRedirect {
-		t.Errorf("Reservation handler returned wrong response code: got %d, wanted %d", rr.Code, http.StatusTemporaryRedirect)
+	if rr.Code != http.StatusSeeOther {
+		t.Errorf("Reservation handler returned wrong response code: got %d, wanted %d", rr.Code, http.StatusSeeOther)
 	}
 }
 
@@ -162,30 +171,50 @@ func TestRepository_PostReservation(t *testing.T) {
 	handler = http.HandlerFunc(Repo.PostReservation)
 
 	handler.ServeHTTP(rr, req)
-	if rr.Code != http.StatusTemporaryRedirect {
+	if rr.Code != http.StatusSeeOther {
 		t.Errorf("Reservation handler returned wrong response code for missing post body: got %d, wanted %d", rr.Code, http.StatusSeeOther)
 	}
 
-	// test for invalid start date
-	param := []map[string]string{
-		{"start_date": "invalid", "end_date": "2050-01-02", "first_name": "John", "last_name": "Smith", "email": "john@smith.com", "phone": "123456789", "room_id": "1"},
-		{"start_date": "2050-01-01", "end_date": "invalid", "first_name": "John", "last_name": "Smith", "email": "john@smith.com", "phone": "123456789", "room_id": "1"},
-		{"start_date": "2050-01-01", "end_date": "2050-01-02", "first_name": "John", "last_name": "Smith", "email": "john@smith.com", "phone": "123456789", "room_id": "invalid"},
-		{"start_date": "2050-01-01", "end_date": "2050-01-02", "first_name": "J", "last_name": "Smith", "email": "john@smith.com", "phone": "123456789", "room_id": "1"},
-		{"start_date": "2050-01-01", "end_date": "2050-01-02", "first_name": "John", "last_name": "Smith", "email": "john@smith.com", "phone": "123456789", "room_id": "2"},
-		{"start_date": "2050-01-01", "end_date": "2050-01-02", "first_name": "John", "last_name": "Smith", "email": "john@smith.com", "phone": "123456789", "room_id": "3"},
+	param := []struct {
+		body       map[string]string
+		resultcode int
+	}{
+		{
+			map[string]string{"start_date": "invalid", "end_date": "2050-01-02", "first_name": "John", "last_name": "Smith", "email": "john@smith.com", "phone": "123456789", "room_id": "1"},
+			http.StatusSeeOther,
+		},
+		{
+			map[string]string{"start_date": "2050-01-01", "end_date": "invalid", "first_name": "John", "last_name": "Smith", "email": "john@smith.com", "phone": "123456789", "room_id": "1"},
+			http.StatusSeeOther,
+		},
+		{
+			map[string]string{"start_date": "2050-01-01", "end_date": "2050-01-02", "first_name": "John", "last_name": "Smith", "email": "john@smith.com", "phone": "123456789", "room_id": "invalid"},
+			http.StatusSeeOther,
+		},
+		{
+			map[string]string{"start_date": "2050-01-01", "end_date": "2050-01-02", "first_name": "J", "last_name": "Smith", "email": "john@smith.com", "phone": "123456789", "room_id": "1"},
+			http.StatusOK,
+		},
+		{
+			map[string]string{"start_date": "2050-01-01", "end_date": "2050-01-02", "first_name": "John", "last_name": "Smith", "email": "john@smith.com", "phone": "123456789", "room_id": "2"},
+			http.StatusSeeOther,
+		},
+		{
+			map[string]string{"start_date": "2050-01-01", "end_date": "2050-01-02", "first_name": "John", "last_name": "Smith", "email": "john@smith.com", "phone": "123456789", "room_id": "3"},
+			http.StatusSeeOther,
+		},
 	}
 
 	for _, value := range param {
-		req, _ = http.NewRequest("POST", "/make-reservation", strings.NewReader(reqBodyBuilder(value)))
+		req, _ = http.NewRequest("POST", "/make-reservation", strings.NewReader(reqBodyBuilder(value.body)))
 		ctx = getCtx(req)
 		req = req.WithContext(ctx)
 		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 		rr = httptest.NewRecorder()
 		handler = http.HandlerFunc(Repo.PostReservation)
 		handler.ServeHTTP(rr, req)
-		if rr.Code != http.StatusTemporaryRedirect {
-			t.Errorf("Reservation handler returned wrong response code for invalid input. Got %d, wanted %d, input: %s", rr.Code, http.StatusTemporaryRedirect, value)
+		if rr.Code != value.resultcode {
+			t.Errorf("Reservation handler returned wrong response code for invalid input. Got %d, wanted %d, input: %s", rr.Code, value.resultcode, value.body)
 		}
 	}
 }
@@ -232,4 +261,90 @@ func getCtx(req *http.Request) context.Context {
 		log.Println(err)
 	}
 	return ctx
+}
+
+var loginTests = []struct {
+	name               string
+	email              string
+	expectedStatusCode int
+	expectedHTML       string
+	expectedLocation   string
+}{
+	{"valid-credentials", "me@here.ca", http.StatusSeeOther, "", "/"},
+	{"invalid-credentials", "jack@nimble.com", http.StatusSeeOther, "", "/user/login"},
+	{"invalid-data", "j", http.StatusOK, `action="/user/login"`, ""},
+}
+
+func TestLogin(t *testing.T) {
+	// range through all tests
+	for _, e := range loginTests {
+		postedData := url.Values{}
+		postedData.Add("email", e.email)
+		postedData.Add("password", "password")
+
+		// create request
+		req, _ := http.NewRequest("POST", "/user/login", strings.NewReader(postedData.Encode()))
+		ctx := getCtx(req)
+		req = req.WithContext(ctx)
+
+		// set the header
+		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+		rr := httptest.NewRecorder()
+
+		// call the handler
+		handler := http.HandlerFunc(Repo.PostShowLogin)
+		handler.ServeHTTP(rr, req)
+
+		if rr.Code != e.expectedStatusCode {
+			t.Errorf("failed  %s: expected code %d, but got %d", e.name, e.expectedStatusCode, rr.Code)
+		}
+
+		if e.expectedLocation != "" {
+			// get the URL from test
+			actualLocation, _ := rr.Result().Location()
+			if actualLocation.String() != e.expectedLocation {
+				t.Errorf("failed %s: expected location %s but got location %s", e.name, e.expectedLocation, actualLocation.String())
+			}
+		}
+
+		// checking for expected values in HTML
+		if e.expectedHTML != "" {
+			// read response body into a string
+			html := rr.Body.String()
+			if !strings.Contains(html, e.expectedHTML) {
+				t.Errorf("failed %s: expected to find %s but did not", e.name, e.expectedHTML)
+			}
+		}
+	}
+}
+
+var bookTests = []struct {
+	Name               string
+	RoomID             int
+	startDate          string
+	endDate            string
+	expectedStatusCode int
+	expectedLocation   string
+}{
+	{"bookTest valid", 1, "2021-06-26", "2021-06-27", http.StatusOK, "/make-reservation"},
+	//{"bookTest invalid", 1, "2011-13-22", "2021-06-40", http.StatusInternalServerError, ""},
+}
+
+func TestRepository_BookRoom(t *testing.T) {
+
+	routes := getRoutes()
+	ts := httptest.NewTLSServer(routes)
+	defer ts.Close()
+
+	for _, e := range bookTests {
+		urlParam := fmt.Sprintf("?id=%d&s=%s&e=%s", e.RoomID, e.startDate, e.endDate)
+		resp, err := ts.Client().Get(ts.URL + "/book-room" + urlParam)
+		if err != nil {
+			t.Log(err)
+			t.Fatal(err)
+		}
+		if resp.StatusCode != e.expectedStatusCode {
+			t.Errorf("error with %s: got %d but expected %d", e.Name, resp.StatusCode, e.expectedStatusCode)
+		}
+	}
 }
